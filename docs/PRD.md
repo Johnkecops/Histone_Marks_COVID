@@ -3,7 +3,7 @@
 
 **Project:** histone_mark_mining  
 **Author:** Dr. Arli Aditya Parikesit  
-**Version:** 1.1  
+**Version:** 1.2  
 **Date:** 2026-06-16  
 **Status:** Active development
 
@@ -31,7 +31,7 @@ No lightweight, reproducible Python pipeline currently exists that integrates hi
 - Full ChIP-seq peak calling or read alignment (upstream of this pipeline).
 - ATAC-seq, bisulfite-seq, or RNA-seq integration (separate pipelines).
 - Supervised classification of chromatin states without an independent biological label source (flagged for future work).
-- Web application or GUI front-end.
+- Production-grade deployment (authentication, multi-user concurrency, persistent storage).
 
 ---
 
@@ -105,7 +105,17 @@ No lightweight, reproducible Python pipeline currently exists that integrates hi
 |----|-------------|
 | F18 | Per-cluster Poisson significance test using the `count` column mean as lambda; survival function p-value reported for each cluster. |
 
-### 5.9 Output
+### 5.10 Streamlit Dashboard
+
+| ID | Requirement |
+|----|-------------|
+| F22 | Dashboard launched via `streamlit run app.py`; opens on `localhost:8501`. |
+| F23 | Sidebar controls: cosine similarity threshold (slider 0.50-1.00), number of clusters k (slider 2-5), Histome2 live data toggle (checkbox). All controls trigger live recomputation via `st.cache_data`. |
+| F24 | Six tabs matching pipeline steps: Data Overview, Network Graph, Correlation, Scale-Free Analysis, Clustering, Statistics. Each tab displays figures (via `st.pyplot`), metrics (`st.metric`), and tables (`st.dataframe`). |
+| F25 | Power-law OLS fit overlaid on log-log degree distribution plot; gamma value and [2,3] range check displayed as colored status indicator. |
+| F26 | All matplotlib figures closed after rendering (`plt.close`) to prevent memory accumulation across Streamlit reruns. |
+
+### 5.11 Output
 
 | ID | Requirement |
 |----|-------------|
@@ -124,6 +134,7 @@ No lightweight, reproducible Python pipeline currently exists that integrates hi
 | NF3 | Self-contained: single Python script plus test file; all dependencies pip-installable. |
 | NF4 | Testable: 9 smoke tests covering data generation, network fallback, graph centrality correctness; all pass before merge. |
 | NF5 | Documented: script header with module, purpose, author, date, parameters, and references. |
+| NF6 | Interactive: Streamlit dashboard exposes all six pipeline steps with live parameter controls; no page reload required on parameter change. |
 
 ---
 
@@ -227,7 +238,8 @@ graph TD
 
 | Deliverable | Description |
 |-------------|-------------|
-| `histone_mark_mining.py` | Main analysis pipeline |
+| `histone_mark_mining.py` | Main analysis pipeline (CLI) |
+| `app.py` | Streamlit interactive dashboard |
 | `tests/test_pipeline.py` | Smoke test suite (pytest) |
 | `scale_free_network.png` | Directed network graph; hubs in red |
 | `degree_distribution.png` | Log-log degree distribution with OLS power-law fit |
@@ -286,3 +298,4 @@ graph TD
 | LOW | Add `--threshold` CLI argument for similarity cutoff | Sensitivity analysis without code edits |
 | LOW | Refactor `main()` into discrete step functions (e.g., `build_graph`, `run_pca`, `evaluate_clusters`) | Raises graph cohesion from 0.018; enables per-step unit testing and profiling |
 | LOW | Add `pyproject.toml` with `pip install -e .` entry point | Enables normal `import histone_mark_mining` without `sys.path` manipulation; makes test-to-module coupling graph-visible |
+| DONE | Streamlit interactive dashboard (`app.py`) | Six-tab dashboard with sidebar parameter controls and live recomputation |

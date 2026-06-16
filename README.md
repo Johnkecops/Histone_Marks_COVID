@@ -20,7 +20,7 @@ Python 3.8+. Install dependencies:
 
 ```bash
 pip install networkx matplotlib pandas numpy requests beautifulsoup4 \
-            scikit-learn scipy
+            scikit-learn scipy streamlit
 ```
 
 | Package | Version | Role |
@@ -28,15 +28,18 @@ pip install networkx matplotlib pandas numpy requests beautifulsoup4 \
 | networkx | >=2.6 | Graph construction and centrality |
 | scikit-learn | >=1.0 | Normalization, PCA, KMeans, cluster quality, cosine similarity |
 | scipy | >=1.7 | KS test, Poisson sf, power-law curve fitting |
-| matplotlib | >=3.4 | Figure output (non-interactive) |
+| matplotlib | >=3.4 | Figure output (non-interactive and Streamlit) |
 | pandas | >=1.3 | DataFrame operations |
 | numpy | >=1.21 | Numerical operations |
 | requests | >=2.26 | Histome2 HTTP fetch |
 | beautifulsoup4 | >=4.10 | Histome2 HTML parsing |
+| streamlit | >=1.30 | Interactive web dashboard |
 
 ---
 
 ## Usage
+
+### Command-line pipeline
 
 ```bash
 # Run with default output directory (current working directory)
@@ -47,6 +50,14 @@ python histone_mark_mining.py --output-dir results/figures
 ```
 
 Safe for non-interactive/HPC execution (no `plt.show()` blocking).
+
+### Streamlit dashboard
+
+```bash
+streamlit run app.py
+```
+
+Opens at `http://localhost:8501`. Use the sidebar to adjust the similarity threshold, number of clusters, and data source. All six pipeline steps are displayed as interactive tabs with live parameter updates.
 
 ---
 
@@ -109,7 +120,8 @@ pytest tests/test_pipeline.py -v
 ## Project Structure
 
 ```
-histone_mark_mining.py     # Main pipeline
+histone_mark_mining.py     # Main pipeline (CLI)
+app.py                     # Streamlit interactive dashboard
 tests/
 └── test_pipeline.py       # Smoke tests (pytest)
 docs/
