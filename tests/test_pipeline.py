@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
 Module: test_pipeline
-Purpose: Smoke tests for Histone-mark-mining.py
+Purpose: Smoke tests for histone_mark_mining.py
 Author: Dr. Arli Aditya Parikesit
 Date: 2026
 """
-import importlib.util
 import os
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import histone_mark_mining as _mod
 
 import networkx as nx
 import numpy as np
@@ -15,12 +17,6 @@ import pandas as pd
 import pytest
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import StandardScaler
-
-# Load module by file path — hyphen in filename prevents normal import.
-_MODULE_PATH = os.path.join(os.path.dirname(__file__), "..", "Histone-mark-mining.py")
-_spec = importlib.util.spec_from_file_location("histone_mark_mining", _MODULE_PATH)
-_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
 
 
 # ---------------------------------------------------------------------------

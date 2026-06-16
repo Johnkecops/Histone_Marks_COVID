@@ -1,7 +1,7 @@
 # Product Requirements Document
 ## Histone Mark Co-occurrence Network Analysis Pipeline
 
-**Project:** Histone-mark-mining  
+**Project:** histone_mark_mining  
 **Author:** Dr. Arli Aditya Parikesit  
 **Version:** 1.0  
 **Date:** 2026-06-16  
@@ -141,7 +141,7 @@ No lightweight, reproducible Python pipeline currently exists that integrates hi
 ## 8. Technical Architecture
 
 ```
-Histone-mark-mining.py
+histone_mark_mining.py
 │
 ├── data_mining()               # Simulated fallback dataset
 ├── fetch_histome2_data()       # Live Histome2 scraper (with fallback)
@@ -179,7 +179,7 @@ tests/
 
 | Deliverable | Description |
 |-------------|-------------|
-| `Histone-mark-mining.py` | Main analysis pipeline |
+| `histone_mark_mining.py` | Main analysis pipeline |
 | `tests/test_pipeline.py` | Smoke test suite (pytest) |
 | `scale_free_network.png` | Directed network graph; hubs in red |
 | `degree_distribution.png` | Log-log degree distribution with OLS power-law fit |

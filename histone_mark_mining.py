@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Module: Histone-mark-mining
+Module: histone_mark_mining
 Purpose: Network analysis of histone mark co-occurrence across genomic regions
 Author: Dr. Arli Aditya Parikesit
 Date: 2026
