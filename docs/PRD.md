@@ -3,7 +3,7 @@
 
 **Project:** histone_mark_mining  
 **Author:** Dr. Arli Aditya Parikesit  
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** 2026-06-16  
 **Status:** Active development
 
@@ -160,6 +160,54 @@ tests/
 └── test_pipeline.py            # 9 smoke tests (pytest)
 ```
 
+### 8.1 Knowledge Graph Analysis
+
+Graph built via code-review-graph (2026-06-16): **16 nodes, 265 edges, 2 files, 1 flow, 2 communities.**
+
+**Communities:**
+
+| Community | Nodes | Cohesion | Contents |
+|-----------|-------|----------|----------|
+| `histone-mark-data` | 4 | 0.018 | `data_mining`, `fetch_histome2_data`, `_power_law_log`, `main` |
+| `tests-data` | 10 | 0.000 | 9 test functions + `built_graph` fixture |
+
+**Execution flow:**
+
+| Flow | Criticality | Nodes | Notes |
+|------|-------------|-------|-------|
+| `main` | 0.36 | 4 | Only entry point; no sub-flows or CLI subcommands |
+
+**Architecture diagram:**
+
+```mermaid
+graph TD
+    subgraph HM["histone-mark-data (pipeline)"]
+        DM["data_mining()"]
+        FH["fetch_histome2_data()"]
+        PL["_power_law_log()"]
+        M["main(output_dir)"]
+    end
+
+    subgraph TD["tests-data (test suite)"]
+        BG["built_graph [fixture]"]
+        T1["test_data_mining_*  (x5)"]
+        T2["test_fetch_histome2_*"]
+        T3["test_graph_* / test_centrality_* (x3)"]
+    end
+
+    DM -->|simulated fallback| M
+    FH -->|live data or None| M
+    M -->|inline call| PL
+
+    TD -. "sys.path import (runtime only; not graph-visible)" .-> HM
+```
+
+**Key structural findings:**
+
+- `main()` concentrates all 8 pipeline steps inline. Cohesion of `histone-mark-data` is 0.018 (near-zero) because only `main` calls the other three functions; no inter-function calls exist outside `main`. Each step is a candidate for extraction into a discrete function to improve testability and graph cohesion.
+- `tests-data` cohesion is 0 by design — flat pytest suite with no shared helper calls (the `built_graph` fixture is the only shared construct).
+- Cross-community coupling is 0 in the static graph. The `sys.path.insert + import histone_mark_mining` pattern in `test_pipeline.py` is resolved at runtime but invisible to the static parser. Adding a `conftest.py` or proper packaging (`pyproject.toml`) would not resolve this; it is a fundamental limitation of static import tracing for path-manipulated imports.
+
 **Key dependencies:**
 
 | Package | Version constraint | Role |
@@ -207,6 +255,8 @@ tests/
 4. **Unsupervised cluster labels.** Chromatin state labels come from KMeans, not from biological ground truth (e.g., ChIP-seq peak calls, ENCODE annotations). Supervised prediction requires an independent label source.
 5. **O(n^2) similarity loop.** Graph edge construction iterates all region pairs. Scales poorly beyond ~5,000 regions; vectorized threshold masking needed for large datasets.
 6. **EpiFactors not integrated.** No verified API endpoint for programmatic access; data must be manually downloaded for multi-source analysis.
+7. **`main()` monolith.** All 8 pipeline steps are inline inside `main()`. Graph cohesion of the pipeline community is 0.018. Individual steps cannot be unit-tested, profiled, or swapped independently without refactoring. See roadmap.
+8. **Static import tracing gap.** `sys.path.insert + import histone_mark_mining` in the test file is not resolved by static analysis tools. Cross-community coupling reports 0 edges despite runtime dependency. Proper packaging (`pyproject.toml` with `pip install -e .`) is the only full fix.
 
 ---
 
@@ -234,3 +284,5 @@ tests/
 | MEDIUM | Add EpiFactors integration via CSV bulk download | Multi-source validation strengthens epigenetic factor coverage |
 | LOW | Add `environments/environment.yml` and `environments/requirements.txt` | Reproducibility for collaborators |
 | LOW | Add `--threshold` CLI argument for similarity cutoff | Sensitivity analysis without code edits |
+| LOW | Refactor `main()` into discrete step functions (e.g., `build_graph`, `run_pca`, `evaluate_clusters`) | Raises graph cohesion from 0.018; enables per-step unit testing and profiling |
+| LOW | Add `pyproject.toml` with `pip install -e .` entry point | Enables normal `import histone_mark_mining` without `sys.path` manipulation; makes test-to-module coupling graph-visible |
