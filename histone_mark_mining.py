@@ -29,23 +29,40 @@ from scipy.stats import ks_2samp, poisson
 from scipy.optimize import curve_fit
 from collections import Counter
 
+# Biological labels for each simulated mark column.
+# mark1 (H3K4me3): trimethylation of H3 Lys4 — active promoter mark, independent.
+# mark2 (H3K27ac): acetylation of H3 Lys27 — active enhancer/promoter, correlated
+#                  with H3K4me3 (simulated via 0.6*mark1 + noise).
+# mark3 (H3K9me3): trimethylation of H3 Lys9 — repressive heterochromatin, independent.
+_MARK_LABELS = {
+    'mark1': 'H3K4me3',
+    'mark2': 'H3K27ac',
+    'mark3': 'H3K9me3',
+}
+
 # Function to simulate data mining from a repository website
 def data_mining():
     # Simulating 100 genomic regions
     np.random.seed(42)
     n_samples = 100
     regions = [f"region_{i}" for i in range(n_samples)]
-    
+
     # Generate 3 histone marks with some correlations to make it interesting
     mark1 = np.random.uniform(0.1, 0.9, n_samples)
     mark2 = 0.6 * mark1 + np.random.uniform(0.0, 0.4, n_samples)
     mark3 = np.random.uniform(0.1, 0.9, n_samples)
-    
+
+    # Assign each region its dominant histone modification (highest raw signal)
+    mark_array = np.column_stack([mark1, mark2, mark3])
+    mark_keys = ['mark1', 'mark2', 'mark3']
+    dominant_marks = [_MARK_LABELS[mark_keys[i]] for i in np.argmax(mark_array, axis=1)]
+
     # Generate read counts
     counts = np.random.poisson(lam=25, size=n_samples)
-    
+
     return {
         'region': regions,
+        'histone_modification': dominant_marks,
         'mark1': list(mark1),
         'mark2': list(mark2),
         'mark3': list(mark3),

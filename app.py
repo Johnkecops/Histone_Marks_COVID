@@ -159,7 +159,28 @@ with tab1:
     c3.metric("Data source", source_label)
 
     st.subheader("Raw data (first 10 rows)")
-    st.dataframe(df_raw.head(10), use_container_width=True)
+    display_cols = (
+        ["region", "histone_modification"] + histone_marks + ["count"]
+        if "histone_modification" in df_raw.columns
+        else list(df_raw.columns)
+    )
+    st.dataframe(
+        df_raw[display_cols].head(10).rename(
+            columns={"histone_modification": "Histone modification (dominant mark)"}
+        ),
+        use_container_width=True,
+    )
+
+    if "histone_modification" in df_raw.columns:
+        st.caption(
+            "**Histone modification column**: dominant mark per region by raw signal intensity. "
+            "H3K4me3 = trimethyl-Lys4 H3 (active promoter); "
+            "H3K27ac = acetyl-Lys27 H3 (active enhancer/promoter); "
+            "H3K9me3 = trimethyl-Lys9 H3 (repressive heterochromatin)."
+        )
+        mod_counts = df_raw["histone_modification"].value_counts().reset_index()
+        mod_counts.columns = ["Modification", "Region count"]
+        st.dataframe(mod_counts, use_container_width=True)
 
     st.subheader("Descriptive statistics (raw)")
     st.dataframe(df_raw[histone_marks].describe().round(4), use_container_width=True)
@@ -184,8 +205,14 @@ with tab2:
     plt.close(fig)
 
     st.subheader("Centrality — top 10")
+    _mod_map = (
+        df_raw.set_index("region")["histone_modification"].to_dict()
+        if "histone_modification" in df_raw.columns
+        else {}
+    )
     cent_df = pd.DataFrame({
         "Region": list(deg_c.keys()),
+        "Histone modification": [_mod_map.get(r, "") for r in deg_c],
         "Degree centrality": [round(deg_c[r], 4) for r in deg_c],
         "Betweenness centrality": [round(between_c[r], 4) for r in deg_c],
         "Closeness centrality": [round(close_c[r], 4) for r in deg_c],
@@ -323,10 +350,12 @@ with tab5:
     plt.close(fig)
 
     st.subheader("Cluster assignments (first 20 regions)")
-    st.dataframe(
-        df[["region"] + histone_marks + ["cluster"]].head(20),
-        use_container_width=True,
+    _cluster_cols = (
+        ["region", "histone_modification"] + histone_marks + ["cluster"]
+        if "histone_modification" in df.columns
+        else ["region"] + histone_marks + ["cluster"]
     )
+    st.dataframe(df[_cluster_cols].head(20), use_container_width=True)
 
 # ---- Tab 6: Statistics -----------------------------------------------------
 with tab6:
