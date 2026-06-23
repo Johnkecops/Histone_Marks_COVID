@@ -7,7 +7,7 @@ Date: 2026
 Parameters:
     - threshold: cosine similarity threshold for graph edges (sidebar slider)
     - n_clusters: number of KMeans chromatin state clusters (sidebar slider)
-    - use_live: attempt Histome2 live data ingestion (sidebar checkbox)
+    - use_simulated: override to simulated data instead of Histome2 (sidebar checkbox)
 References:
     - Clauset A, Shalizi CR, Newman MEJ (2009) Power-law distributions in
       empirical data. SIAM Rev 51:661-703. https://doi.org/10.1137/070710111
@@ -51,7 +51,7 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 
 st.sidebar.title("Parameters")
-use_live = st.sidebar.checkbox("Attempt Histome2 live data", value=False)
+use_simulated = st.sidebar.checkbox("Use simulated data instead", value=False)
 threshold = st.sidebar.slider("Cosine similarity threshold", 0.50, 1.00, 0.95, 0.01)
 n_clusters = st.sidebar.slider("Chromatin clusters (k)", 2, 5, 3)
 
@@ -67,17 +67,20 @@ st.sidebar.caption(
 # ---------------------------------------------------------------------------
 
 @st.cache_data(show_spinner="Loading data...")
-def load_data(use_live: bool):
-    if use_live:
+def load_data(use_simulated: bool):
+    if not use_simulated:
         df_live = fetch_histome2_data()
         if df_live is not None and not df_live.empty:
             if "count" not in df_live.columns:
-                df_live["count"] = np.random.poisson(lam=25, size=len(df_live))
+                df_live["count"] = np.random.default_rng(42).poisson(lam=25, size=len(df_live))
             return df_live, "Histome2 (live)"
+        return pd.DataFrame(data_mining()), "Simulated (Histome2 unavailable)"
     return pd.DataFrame(data_mining()), "Simulated (seed=42)"
 
-df_raw, source_label = load_data(use_live)
+df_raw, source_label = load_data(use_simulated)
 st.sidebar.info(f"Source: **{source_label}**")
+if "unavailable" in source_label:
+    st.sidebar.warning("Histome2 fetch failed — using simulated fallback.")
 
 numeric_cols = df_raw.select_dtypes(include=[np.number]).columns
 histone_marks = [c for c in numeric_cols if c.startswith("mark")]
