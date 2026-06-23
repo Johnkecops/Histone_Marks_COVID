@@ -175,7 +175,8 @@ with tab2:
     pos = nx.spring_layout(G, k=0.15, seed=42)
     node_degrees = [G.degree(n) for n in G.nodes()]
     max_deg = max(node_degrees) if node_degrees else 1
-    colors = ["red" if G.degree(n) > 0.8 * max_deg else "lightblue" for n in G.nodes()]
+    hub_threshold = np.percentile(node_degrees, 80) if node_degrees else 0
+    colors = ["red" if G.degree(n) > hub_threshold else "lightblue" for n in G.nodes()]
     nx.draw(G, pos, ax=ax, with_labels=False, node_color=colors,
             edge_color="gray", node_size=100, alpha=0.8, width=0.5)
     ax.set_title("Epigenetic Network (red = hub nodes, degree > 80th percentile)")
@@ -232,6 +233,7 @@ with tab4:
     y_freq = [degree_counts[d] for d in x_deg]
 
     gamma_fit = gamma_se = r2 = None
+    _fit_failed = False
     if len(x_deg) >= 3:
         log_x = np.log(np.array(x_deg, dtype=float))
         log_y = np.log(np.array(y_freq, dtype=float))
@@ -239,13 +241,14 @@ with tab4:
         try:
             popt, pcov = curve_fit(_pl, log_x, log_y)
             gamma_fit = popt[1]
-            gamma_se = np.sqrt(pcov[1, 1])
+            _gamma_se_raw = np.sqrt(pcov[1, 1])
+            gamma_se = _gamma_se_raw if np.isfinite(_gamma_se_raw) else None
             log_y_pred = _pl(log_x, *popt)
             ss_res = np.sum((log_y - log_y_pred) ** 2)
             ss_tot = np.sum((log_y - np.mean(log_y)) ** 2)
             r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
         except Exception:
-            pass
+            _fit_failed = True
 
     fig, ax = plt.subplots(figsize=(8, 5))
     if x_deg:
@@ -253,8 +256,9 @@ with tab4:
         if gamma_fit is not None:
             x_fit = np.linspace(min(x_deg), max(x_deg), 200)
             y_fit = np.exp(popt[0]) * x_fit ** (-popt[1])
+            se_label = f" ± {gamma_se:.2f}" if gamma_se is not None else " (SE undefined)"
             ax.loglog(x_fit, y_fit, "r-",
-                      label=f"Power-law fit  γ = {gamma_fit:.2f} ± {gamma_se:.2f}")
+                      label=f"Power-law fit  γ = {gamma_fit:.2f}{se_label}")
     ax.set_xlabel("Degree (log scale)")
     ax.set_ylabel("Frequency (log scale)")
     ax.set_title("Degree Distribution (Log-Log)")
@@ -262,9 +266,13 @@ with tab4:
     st.pyplot(fig)
     plt.close(fig)
 
+    if _fit_failed:
+        st.caption("Power-law fit did not converge.")
+
     st.subheader("KS test vs. Poisson")
     mean_deg = np.mean(degree_values) if degree_values else 0
-    pois_s = np.random.poisson(lam=mean_deg, size=len(degree_values)) if mean_deg > 0 else np.zeros(len(degree_values))
+    _rng = np.random.default_rng(42)
+    pois_s = _rng.poisson(lam=mean_deg, size=len(degree_values)) if mean_deg > 0 else np.zeros(len(degree_values))
     ks_stat, ks_p = ks_2samp(degree_values, pois_s)
     c1, c2 = st.columns(2)
     c1.metric("KS statistic", f"{ks_stat:.4f}")
@@ -293,8 +301,8 @@ with tab5:
     c1.metric("PCA components", n_comps)
     c2.metric("Clusters (k)", k)
     if len(set(cluster_labels)) > 1:
-        sil = silhouette_score(features, cluster_labels)
-        db = davies_bouldin_score(features, cluster_labels)
+        sil = silhouette_score(reduced, cluster_labels)
+        db = davies_bouldin_score(reduced, cluster_labels)
         c3.metric("Silhouette score", f"{sil:.4f}")
         st.metric("Davies-Bouldin index", f"{db:.4f}",
                   help="Lower = more compact, better-separated clusters")
