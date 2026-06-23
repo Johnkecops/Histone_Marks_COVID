@@ -66,11 +66,56 @@ def data_mining():
     return {
         'region': regions,
         'histone_modification': dominant_marks,
+        'organism_type': ['Human'] * n_samples,
+        'species': ['Homo sapiens'] * n_samples,
         'mark1': list(mark1),
         'mark2': list(mark2),
         'mark3': list(mark3),
         'count': list(counts)
     }
+
+# ---------------------------------------------------------------------------
+# Organism classification helpers (shared across all live fetch functions)
+# ---------------------------------------------------------------------------
+
+def _classify_organism(scientific_name, lineage, division):
+    if scientific_name == 'Homo sapiens':
+        return 'Human'
+    if 'Viridiplantae' in lineage:
+        return 'Plant'
+    if any(k in lineage for k in ('Bacteria', 'Archaea', 'Viruses', 'Fungi', 'Apicomplexa')):
+        return 'Microbe'
+    if division in ('Primates', 'Rodents', 'Mammals', 'Vertebrates', 'Invertebrates'):
+        return 'Animal'
+    return 'Other'
+
+def _lookup_ncbi_taxids(taxids):
+    """Batch-lookup NCBI taxonomy for a list of taxids.
+    Returns {taxid: (scientific_name, organism_type)}.
+    """
+    if not taxids:
+        return {}
+    ids = ','.join(str(int(t)) for t in taxids)
+    url = (
+        'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
+        f'?db=taxonomy&id={ids}&retmode=xml'
+    )
+    try:
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
+        result = {}
+        for taxon in root.findall('Taxon'):
+            tid = int(taxon.findtext('TaxId') or 0)
+            name = taxon.findtext('ScientificName') or 'Unknown'
+            lineage = taxon.findtext('Lineage') or ''
+            div = taxon.findtext('Division') or ''
+            result[tid] = (name, _classify_organism(name, lineage, div))
+        return result
+    except Exception as e:
+        print(f"Warning: NCBI taxonomy lookup failed: {e}")
+        return {}
+
 
 # PTM modification types to fetch from Histome2 Human DB.
 # mark1 = n_writers, mark2 = n_erasers, mark3 = n_mod_types (site cross-regulation breadth).
@@ -126,6 +171,8 @@ def fetch_histome2_data():
         rows.append({
             'region': site,
             'histone_modification': histone_protein,
+            'organism_type': 'Human',
+            'species': 'Homo sapiens',
             'mark1': len(info['writers']),
             'mark2': len(info['erasers']),
             'mark3': len(info['mod_types']),
@@ -171,18 +218,28 @@ def fetch_histonedb_data():
             mean_score=('best_score', 'mean'),
             n_sequences=('accession', 'count'),
             n_taxa=('taxid', 'nunique'),
+            dominant_taxid=('taxid', lambda x: x.mode()[0]),
         )
         .reset_index()
     )
+
+    taxid_map = _lookup_ncbi_taxids(agg['dominant_taxid'].dropna().unique().tolist())
 
     agg = agg.rename(columns={'hist_var': 'region', 'hist_type': 'histone_modification'})
     agg['mark1'] = agg['mean_score'].round(2)
     agg['mark2'] = agg['n_sequences'].astype(float)
     agg['mark3'] = agg['n_taxa'].astype(float)
     agg['count'] = agg['n_sequences']
+    agg['species'] = agg['dominant_taxid'].apply(
+        lambda t: taxid_map.get(int(t), ('Unknown', 'Other'))[0]
+    )
+    agg['organism_type'] = agg['dominant_taxid'].apply(
+        lambda t: taxid_map.get(int(t), ('Unknown', 'Other'))[1]
+    )
 
     result = (
-        agg[['region', 'histone_modification', 'mark1', 'mark2', 'mark3', 'count']]
+        agg[['region', 'histone_modification', 'organism_type', 'species',
+             'mark1', 'mark2', 'mark3', 'count']]
         .dropna(subset=['mark1'])
         .sort_values('region')
         .reset_index(drop=True)
@@ -245,20 +302,23 @@ def _fetch_prohistonedb_category(codename):
         r.raise_for_status()
         root = ET.fromstring(r.content)
         clades = root.findall('.//p:clade[p:name]', _PROHISTONEDB_NS)
-        taxa = set()
+        tax_counts = Counter()
         seq_lens = []
         for c in clades:
             tax = c.find('p:taxonomy/p:code', _PROHISTONEDB_NS)
             if tax is not None and tax.text:
-                taxa.add(tax.text)
+                tax_counts[tax.text] += 1
             seq = c.find('p:sequence/p:mol_seq', _PROHISTONEDB_NS)
             if seq is not None and seq.text:
                 seq_lens.append(len(seq.text))
+        dominant_taxon = tax_counts.most_common(1)[0][0] if tax_counts else 'Unknown'
         return {
             'region': codename.replace('_', ' '),
             'histone_modification': _broad_category(codename),
+            'organism_type': 'Microbe',
+            'species': dominant_taxon,
             'mark1': float(len(clades)),
-            'mark2': float(len(taxa)),
+            'mark2': float(len(tax_counts)),
             'mark3': float(np.mean(seq_lens)) if seq_lens else 0.0,
             'count': len(clades),
         }
@@ -287,8 +347,10 @@ def fetch_prohistonedb_data():
         .sort_values('region')
         .reset_index(drop=True)
     )
-    print(f"Fetched {len(df)} proto-histone categories from ProHistoneDB.")
-    return df
+    result = df[['region', 'histone_modification', 'organism_type', 'species',
+                 'mark1', 'mark2', 'mark3', 'count']].copy()
+    print(f"Fetched {len(result)} proto-histone categories from ProHistoneDB.")
+    return result
 
 
 # Main function to integrate and analyze data

@@ -210,17 +210,23 @@ with tab1:
     c3.metric("Data source", source_label)
 
     st.subheader("Raw data (first 10 rows)")
-    display_cols = (
-        ["region", "histone_modification"] + histone_marks + ["count"]
-        if "histone_modification" in df_raw.columns
-        else list(df_raw.columns)
-    )
+    _meta_cols = [c for c in ["histone_modification", "organism_type", "species"]
+                  if c in df_raw.columns]
+    display_cols = ["region"] + _meta_cols + histone_marks + ["count"]
     st.dataframe(
-        df_raw[display_cols].head(10).rename(
-            columns={"histone_modification": "Histone modification (dominant mark)"}
-        ),
+        df_raw[display_cols].head(10).rename(columns={
+            "histone_modification": "Histone modification",
+            "organism_type": "Organism type",
+            "species": "Species / taxon",
+        }),
         use_container_width=True,
     )
+
+    if "organism_type" in df_raw.columns:
+        st.subheader("Organism breakdown")
+        org_counts = df_raw["organism_type"].value_counts().reset_index()
+        org_counts.columns = ["Organism type", "Region count"]
+        st.dataframe(org_counts, use_container_width=True)
 
     if "histone_modification" in df_raw.columns:
         st.caption(
@@ -263,14 +269,15 @@ with tab2:
     plt.close(fig)
 
     st.subheader("Centrality — top 10")
-    _mod_map = (
-        df_raw.set_index("region")["histone_modification"].to_dict()
-        if "histone_modification" in df_raw.columns
-        else {}
-    )
+    _idx = df_raw.set_index("region")
+    _mod_map = _idx["histone_modification"].to_dict() if "histone_modification" in df_raw.columns else {}
+    _org_map = _idx["organism_type"].to_dict() if "organism_type" in df_raw.columns else {}
+    _spe_map = _idx["species"].to_dict() if "species" in df_raw.columns else {}
     cent_df = pd.DataFrame({
         "Region": list(deg_c.keys()),
         "Histone modification": [_mod_map.get(r, "") for r in deg_c],
+        "Organism type": [_org_map.get(r, "") for r in deg_c],
+        "Species / taxon": [_spe_map.get(r, "") for r in deg_c],
         "Degree centrality": [round(deg_c[r], 4) for r in deg_c],
         "Betweenness centrality": [round(between_c[r], 4) for r in deg_c],
         "Closeness centrality": [round(close_c[r], 4) for r in deg_c],
@@ -408,11 +415,9 @@ with tab5:
     plt.close(fig)
 
     st.subheader("Cluster assignments (first 20 regions)")
-    _cluster_cols = (
-        ["region", "histone_modification"] + histone_marks + ["cluster"]
-        if "histone_modification" in df.columns
-        else ["region"] + histone_marks + ["cluster"]
-    )
+    _cluster_meta = [c for c in ["histone_modification", "organism_type", "species"]
+                     if c in df.columns]
+    _cluster_cols = ["region"] + _cluster_meta + histone_marks + ["cluster"]
     st.dataframe(df[_cluster_cols].head(20), use_container_width=True)
 
 # ---- Tab 6: Statistics -----------------------------------------------------
