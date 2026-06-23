@@ -13,6 +13,7 @@ References:
       and function using NetworkX. Proc SciPy 2008, pp 11-15.
 """
 import os
+import re
 import argparse
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -69,35 +70,68 @@ def data_mining():
         'count': list(counts)
     }
 
-# Function to fetch Histome2 data with error handling
+# PTM modification types to fetch from Histome2 Human DB.
+# mark1 = n_writers, mark2 = n_erasers, mark3 = n_mod_types (site cross-regulation breadth).
+_HISTOME2_BASE = 'https://www.actrec.gov.in/histome2/Human/'
+_HISTOME2_MOD_TYPES = [
+    'lysine_methylation',
+    'lysine_acetylation',
+    'arginine_methylation',
+    'lysine_ubiquitination',
+]
+_HISTONE_PROTEIN_RE = re.compile(r'^(H[^KRSTY]+)')
+
 def fetch_histome2_data():
-    url = 'https://www.actrec.gov.in/histome2/'
-    try:
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        data = []
-        regions = soup.find_all('div', class_='region')
-        if not regions:
-            print("Warning: Histome2 HTML structure returned no regions. Using fallback.")
-            return None
-            
-        for region in regions:
-            h2 = region.find('h2')
-            region_name = h2.text if h2 else "unknown_region"
-            marks = region.find_all('div', class_='mark')
-            for mark in marks:
-                h3 = mark.find('h3')
-                span = mark.find('span')
-                mark_name = h3.text if h3 else "unknown_mark"
-                mark_value = span.text if span else "0"
-                data.append({'region': region_name, 'mark': mark_name, 'value': mark_value})
-        
-        return pd.DataFrame(data)
-    except Exception as e:
-        print(f"Error fetching Histome2 data: {e}. Using fallback/simulated data.")
+    site_data = {}
+    for mod_type in _HISTOME2_MOD_TYPES:
+        url = f'{_HISTOME2_BASE}ptm.php?mod_type={mod_type}'
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+            table = soup.find('table')
+            if table is None:
+                continue
+            tbody = table.find('tbody')
+            if tbody is None:
+                continue
+            for row in tbody.find_all('tr'):
+                cells = row.find_all('td')
+                if len(cells) < 3:
+                    continue
+                site = cells[0].get_text(strip=True)
+                if not site:
+                    continue
+                writers = [a.get_text(strip=True) for a in cells[1].find_all('a')]
+                erasers = [a.get_text(strip=True) for a in cells[2].find_all('a')]
+                if site not in site_data:
+                    site_data[site] = {'writers': set(), 'erasers': set(), 'mod_types': set()}
+                site_data[site]['writers'].update(writers)
+                site_data[site]['erasers'].update(erasers)
+                site_data[site]['mod_types'].add(mod_type)
+        except Exception as e:
+            print(f"Warning: could not fetch {mod_type}: {e}")
+            continue
+
+    if not site_data:
+        print("Warning: Histome2 returned no PTM data. Using fallback.")
         return None
+
+    rows = []
+    for site, info in sorted(site_data.items()):
+        m = _HISTONE_PROTEIN_RE.match(site)
+        histone_protein = m.group(1) if m else 'unknown'
+        rows.append({
+            'region': site,
+            'histone_modification': histone_protein,
+            'mark1': len(info['writers']),
+            'mark2': len(info['erasers']),
+            'mark3': len(info['mod_types']),
+            'count': len(info['writers']) + len(info['erasers']),
+        })
+
+    print(f"Fetched {len(rows)} histone modification sites from Histome2.")
+    return pd.DataFrame(rows)
 
 # Main function to integrate and analyze data
 def main(output_dir="."):
