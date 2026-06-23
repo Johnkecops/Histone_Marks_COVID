@@ -20,7 +20,7 @@ Python 3.8+. Install dependencies:
 
 ```bash
 pip install networkx matplotlib pandas numpy requests beautifulsoup4 \
-            scikit-learn scipy streamlit
+            scikit-learn scipy streamlit defusedxml
 ```
 
 | Package | Version | Role |
@@ -31,8 +31,9 @@ pip install networkx matplotlib pandas numpy requests beautifulsoup4 \
 | matplotlib | >=3.4 | Figure output (non-interactive and Streamlit) |
 | pandas | >=1.3 | DataFrame operations |
 | numpy | >=1.21 | Numerical operations |
-| requests | >=2.26 | Histome2 HTTP fetch |
+| requests | >=2.26 | HTTP fetch for all three live databases |
 | beautifulsoup4 | >=4.10 | Histome2 HTML parsing |
+| defusedxml | >=0.7 | Safe XML parsing of ProHistoneDB phylotree files (XXE protection) |
 | streamlit | >=1.30 | Interactive web dashboard |
 
 ---

@@ -7,7 +7,7 @@ Date: 2026
 Parameters:
     - threshold: cosine similarity threshold for graph edges (sidebar slider)
     - n_clusters: number of KMeans chromatin state clusters (sidebar slider)
-    - use_simulated: override to simulated data instead of Histome2 (sidebar checkbox)
+    - db_choice: data source selection (sidebar radio: Histome2 / HistoneDB 2.0 / ProHistoneDB / Simulated)
 References:
     - Clauset A, Shalizi CR, Newman MEJ (2009) Power-law distributions in
       empirical data. SIAM Rev 51:661-703. https://doi.org/10.1137/070710111
@@ -34,7 +34,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, os.path.dirname(__file__))
-from histone_mark_mining import data_mining, fetch_histome2_data
+from histone_mark_mining import (
+    data_mining,
+    fetch_histome2_data,
+    fetch_histonedb_data,
+    fetch_prohistonedb_data,
+)
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -51,7 +56,17 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 
 st.sidebar.title("Parameters")
-use_simulated = st.sidebar.checkbox("Use simulated data instead", value=False)
+db_choice = st.sidebar.radio(
+    "Data source",
+    options=["Histome2", "HistoneDB 2.0", "ProHistoneDB", "Simulated"],
+    index=0,
+    help=(
+        "Histome2: human histone PTM sites (writers/erasers). "
+        "HistoneDB 2.0: histone variant sequences with HMM scores (NCBI). "
+        "ProHistoneDB: proto-histone categories across Archaea, Bacteria, viruses. "
+        "Simulated: synthetic data for testing (seed=42)."
+    ),
+)
 threshold = st.sidebar.slider("Cosine similarity threshold", 0.50, 1.00, 0.95, 0.01)
 n_clusters = st.sidebar.slider("Chromatin clusters (k)", 2, 5, 3)
 
@@ -66,21 +81,54 @@ st.sidebar.caption(
 # Data loading
 # ---------------------------------------------------------------------------
 
+_MARK_DESCRIPTIONS = {
+    "Histome2": {
+        "mark1": "n_writer_enzymes — number of enzymes that add this PTM",
+        "mark2": "n_eraser_enzymes — number of enzymes that remove this PTM",
+        "mark3": "n_modification_types — how many PTM classes this site belongs to",
+    },
+    "HistoneDB 2.0": {
+        "mark1": "mean_HMM_score — mean best-model HMM score across sequences of this variant",
+        "mark2": "n_sequences — total sequences classified as this variant",
+        "mark3": "n_taxa — number of distinct taxonomic IDs carrying this variant",
+    },
+    "ProHistoneDB": {
+        "mark1": "n_sequences — number of proto-histone sequences in this category",
+        "mark2": "n_taxa — number of distinct taxonomic groups in this category",
+        "mark3": "mean_seq_len_aa — mean amino acid sequence length",
+    },
+    "Simulated": {
+        "mark1": "H3K4me3 signal (active promoter mark, simulated)",
+        "mark2": "H3K27ac signal (active enhancer mark, correlated with mark1, simulated)",
+        "mark3": "H3K9me3 signal (repressive heterochromatin mark, simulated)",
+    },
+}
+
 @st.cache_data(show_spinner="Loading data...")
-def load_data(use_simulated: bool):
-    if not use_simulated:
-        df_live = fetch_histome2_data()
-        if df_live is not None and not df_live.empty:
-            if "count" not in df_live.columns:
-                df_live["count"] = np.random.default_rng(42).poisson(lam=25, size=len(df_live))
-            return df_live, "Histome2 (live)"
+def load_data(db_choice: str):
+    if db_choice == "Histome2":
+        df = fetch_histome2_data()
+        if df is not None and not df.empty:
+            if "count" not in df.columns:
+                df["count"] = np.random.default_rng(42).poisson(lam=25, size=len(df))
+            return df, "Histome2 (live)"
         return pd.DataFrame(data_mining()), "Simulated (Histome2 unavailable)"
+    if db_choice == "HistoneDB 2.0":
+        df = fetch_histonedb_data()
+        if df is not None and not df.empty:
+            return df, "HistoneDB 2.0 (live)"
+        return pd.DataFrame(data_mining()), "Simulated (HistoneDB unavailable)"
+    if db_choice == "ProHistoneDB":
+        df = fetch_prohistonedb_data()
+        if df is not None and not df.empty:
+            return df, "ProHistoneDB (live)"
+        return pd.DataFrame(data_mining()), "Simulated (ProHistoneDB unavailable)"
     return pd.DataFrame(data_mining()), "Simulated (seed=42)"
 
-df_raw, source_label = load_data(use_simulated)
+df_raw, source_label = load_data(db_choice)
 st.sidebar.info(f"Source: **{source_label}**")
 if "unavailable" in source_label:
-    st.sidebar.warning("Histome2 fetch failed — using simulated fallback.")
+    st.sidebar.warning(f"{db_choice} fetch failed — using simulated fallback.")
 
 numeric_cols = df_raw.select_dtypes(include=[np.number]).columns
 histone_marks = [c for c in numeric_cols if c.startswith("mark")]
@@ -184,6 +232,13 @@ with tab1:
         mod_counts = df_raw["histone_modification"].value_counts().reset_index()
         mod_counts.columns = ["Modification", "Region count"]
         st.dataframe(mod_counts, use_container_width=True)
+
+    _db_key = db_choice if db_choice in _MARK_DESCRIPTIONS else "Simulated"
+    _mdesc = _MARK_DESCRIPTIONS[_db_key]
+    st.subheader("Mark column meanings for this source")
+    for col, desc in _mdesc.items():
+        if col in histone_marks:
+            st.markdown(f"- **{col}**: {desc}")
 
     st.subheader("Descriptive statistics (raw)")
     st.dataframe(df_raw[histone_marks].describe().round(4), use_container_width=True)

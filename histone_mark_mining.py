@@ -15,6 +15,8 @@ References:
 import os
 import re
 import argparse
+import defusedxml.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import networkx as nx
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -132,6 +134,162 @@ def fetch_histome2_data():
 
     print(f"Fetched {len(rows)} histone modification sites from Histome2.")
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
+# HistoneDB 2.0 (NCBI) — histone variant sequences with HMM classification
+# mark1 = mean HMM score (confidence of variant assignment)
+# mark2 = n_sequences (number of sequences classified as this variant)
+# mark3 = n_taxa (number of distinct taxonomic IDs for this variant)
+# ---------------------------------------------------------------------------
+
+_HISTONEDB_BASE = (
+    'https://www.ncbi.nlm.nih.gov/research/histonedb/static/browse/dumps/'
+)
+
+def fetch_histonedb_data():
+    try:
+        seqs = pd.read_csv(_HISTONEDB_BASE + 'seqs.txt')
+        scores = pd.read_csv(_HISTONEDB_BASE + 'scores.txt')
+    except Exception as e:
+        print(f"Error fetching HistoneDB data: {e}")
+        return None
+
+    best_scores = (
+        scores[scores['used_for_classification'] == True]
+        .groupby('accession')['score']
+        .max()
+        .reset_index()
+        .rename(columns={'score': 'best_score'})
+    )
+
+    merged = seqs.merge(best_scores, on='accession', how='left')
+
+    agg = (
+        merged.groupby(['hist_var', 'hist_type'])
+        .agg(
+            mean_score=('best_score', 'mean'),
+            n_sequences=('accession', 'count'),
+            n_taxa=('taxid', 'nunique'),
+        )
+        .reset_index()
+    )
+
+    agg = agg.rename(columns={'hist_var': 'region', 'hist_type': 'histone_modification'})
+    agg['mark1'] = agg['mean_score'].round(2)
+    agg['mark2'] = agg['n_sequences'].astype(float)
+    agg['mark3'] = agg['n_taxa'].astype(float)
+    agg['count'] = agg['n_sequences']
+
+    result = (
+        agg[['region', 'histone_modification', 'mark1', 'mark2', 'mark3', 'count']]
+        .dropna(subset=['mark1'])
+        .sort_values('region')
+        .reset_index(drop=True)
+    )
+    print(f"Fetched {len(result)} histone variants from HistoneDB 2.0.")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# ProHistoneDB — proto-histone categories in Archaea, Bacteria, and viruses
+# mark1 = n_sequences (number of sequences in category)
+# mark2 = n_taxa (number of distinct taxonomic groups)
+# mark3 = mean_seq_len (mean amino acid sequence length)
+# ---------------------------------------------------------------------------
+
+_PROHISTONEDB_NS = {'p': 'http://www.phyloxml.org'}
+_PROHISTONEDB_CATEGORIES = {
+    1: 'Pacman_doublet',
+    2: 'Nucleosomal',
+    3: 'Xer_histone',
+    4: 'Halo_doublet',
+    5: 'Viral_singlet',
+    6: 'RdgC_histone',
+    7: 'Theion_coiled-coil_histone',
+    8: 'Transmembrane_histone',
+    9: 'Face-to-face',
+    10: 'Poseidoniia_doublet',
+    11: 'Methanococcales_histone',
+    12: 'Bacterial_dimer',
+    13: 'Beta-propeller_histone',
+    14: 'Nanohalo_coiled-coil_histone',
+    15: 'Rab_GTPase_histone',
+    16: 'ZZ_histone',
+    17: 'IHF_histone',
+    18: 'Viral_doublet',
+    21: 'Phage_histone',
+    24: 'Bacterial_H2A_H2B',
+    25: 'DUF1931',
+    26: 'Dimer',
+    27: 'Coiled-coil_histone',
+    28: 'Miscellaneous',
+}
+
+def _broad_category(codename):
+    n = codename.lower()
+    if 'nucleosomal' in n:
+        return 'Nucleosomal'
+    if 'viral' in n or 'phage' in n:
+        return 'Viral/Phage'
+    if 'bacterial' in n or 'ihf' in n:
+        return 'Bacterial'
+    if any(k in n for k in ['halo', 'methanococcales', 'poseidoniia', 'nanohalo', 'theion']):
+        return 'Archaeal'
+    return 'Other'
+
+def _fetch_prohistonedb_category(codename):
+    url = f'https://prohistonedb.org/static/phylotrees/{codename}.xml'
+    try:
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
+        clades = root.findall('.//p:clade[p:name]', _PROHISTONEDB_NS)
+        taxa = set()
+        seq_lens = []
+        for c in clades:
+            tax = c.find('p:taxonomy/p:code', _PROHISTONEDB_NS)
+            if tax is not None and tax.text:
+                taxa.add(tax.text)
+            seq = c.find('p:sequence/p:mol_seq', _PROHISTONEDB_NS)
+            if seq is not None and seq.text:
+                seq_lens.append(len(seq.text))
+        return {
+            'region': codename.replace('_', ' '),
+            'histone_modification': _broad_category(codename),
+            'mark1': float(len(clades)),
+            'mark2': float(len(taxa)),
+            'mark3': float(np.mean(seq_lens)) if seq_lens else 0.0,
+            'count': len(clades),
+        }
+    except Exception as e:
+        print(f"Warning: could not fetch {codename}: {e}")
+        return None
+
+def fetch_prohistonedb_data():
+    rows = []
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {
+            executor.submit(_fetch_prohistonedb_category, name): name
+            for name in _PROHISTONEDB_CATEGORIES.values()
+        }
+        for future in as_completed(futures):
+            result = future.result()
+            if result is not None:
+                rows.append(result)
+
+    if not rows:
+        print("Warning: ProHistoneDB returned no data.")
+        return None
+
+    df = (
+        pd.DataFrame(rows)
+        .sort_values('region')
+        .reset_index(drop=True)
+    )
+    print(f"Fetched {len(df)} proto-histone categories from ProHistoneDB.")
+    return df
+
 
 # Main function to integrate and analyze data
 def main(output_dir="."):
