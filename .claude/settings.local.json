@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__code-review-graph__get_minimal_context_tool",
+      "mcp__code-review-graph__detect_changes_tool",
+      "Bash(rtk ls *)",
+      "Bash(rtk pytest *)",
+      "Bash(git *)",
+      "mcp__code-review-graph__build_or_update_graph_tool",
+      "mcp__code-review-graph__get_architecture_overview_tool",
+      "mcp__code-review-graph__list_flows_tool",
+      "Bash(rtk grep *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app.py'\\).read\\(\\)\\); print\\('app.py: syntax OK'\\)\")",
+      "mcp__code-review-graph__refactor_tool",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 *)",
+      "Bash(rtk git *)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "code-review-graph"
+  ]
+}
