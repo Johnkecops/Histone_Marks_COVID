@@ -95,7 +95,10 @@ def _lookup_ncbi_taxids(taxids):
     """
     if not taxids:
         return {}
-    ids = ','.join(str(int(t)) for t in taxids)
+    valid = [t for t in taxids if pd.notna(t)]
+    if not valid:
+        return {}
+    ids = ','.join(str(int(t)) for t in valid)
     url = (
         'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
         f'?db=taxonomy&id={ids}&retmode=xml'
@@ -126,7 +129,7 @@ _HISTOME2_MOD_TYPES = [
     'arginine_methylation',
     'lysine_ubiquitination',
 ]
-_HISTONE_PROTEIN_RE = re.compile(r'^(H[^KRSTY]+)')
+_HISTONE_PROTEIN_RE = re.compile(r'^(H[^KRSTY-]+)')
 
 def fetch_histome2_data():
     site_data = {}
@@ -218,7 +221,7 @@ def fetch_histonedb_data():
             mean_score=('best_score', 'mean'),
             n_sequences=('accession', 'count'),
             n_taxa=('taxid', 'nunique'),
-            dominant_taxid=('taxid', lambda x: x.mode()[0]),
+            dominant_taxid=('taxid', lambda x: x.mode().iloc[0] if not x.mode().empty else float('nan')),
         )
         .reset_index()
     )
@@ -231,10 +234,10 @@ def fetch_histonedb_data():
     agg['mark3'] = agg['n_taxa'].astype(float)
     agg['count'] = agg['n_sequences']
     agg['species'] = agg['dominant_taxid'].apply(
-        lambda t: taxid_map.get(int(t), ('Unknown', 'Other'))[0]
+        lambda t: taxid_map.get(int(t), ('Unknown', 'Other'))[0] if pd.notna(t) else 'Unknown'
     )
     agg['organism_type'] = agg['dominant_taxid'].apply(
-        lambda t: taxid_map.get(int(t), ('Unknown', 'Other'))[1]
+        lambda t: taxid_map.get(int(t), ('Unknown', 'Other'))[1] if pd.notna(t) else 'Other'
     )
 
     result = (
@@ -301,7 +304,8 @@ def _fetch_prohistonedb_category(codename):
         r = requests.get(url, timeout=15)
         r.raise_for_status()
         root = ET.fromstring(r.content)
-        clades = root.findall('.//p:clade[p:name]', _PROHISTONEDB_NS)
+        clades = [c for c in root.findall('.//p:clade', _PROHISTONEDB_NS)
+                  if c.find('p:name', _PROHISTONEDB_NS) is not None]
         tax_counts = Counter()
         seq_lens = []
         for c in clades:

@@ -42,10 +42,13 @@ if histome2_raw is not None and not histome2_raw.empty:
     marks_map = {"mark1": "has_writer", "mark2": "has_eraser", "mark3": "multi_mod"}
     binary_marks = []
     for col_key, new_name in marks_map.items():
-        vals = pd.to_numeric(df[col_key], errors="coerce").dropna()
+        if col_key not in df.columns:
+            continue
+        numeric_col = pd.to_numeric(df[col_key], errors="coerce")
+        vals = numeric_col.dropna()
         if len(vals) >= 2:
             median = vals.median()
-            df[new_name] = (df[col_key].astype(float) > median).astype(int)
+            df[new_name] = (numeric_col > median).fillna(False).astype(int)
             binary_marks.append(new_name)
     DATABASES["Histome2"] = {
         "df": df,
@@ -66,10 +69,13 @@ if histonedb_raw is not None and not histonedb_raw.empty:
     marks_map = {"mark1": "high_HMM_score", "mark2": "many_sequences", "mark3": "broad_taxonomy"}
     binary_marks = []
     for col_key, new_name in marks_map.items():
-        vals = pd.to_numeric(df[col_key], errors="coerce").dropna()
+        if col_key not in df.columns:
+            continue
+        numeric_col = pd.to_numeric(df[col_key], errors="coerce")
+        vals = numeric_col.dropna()
         if len(vals) >= 2:
             median = vals.median()
-            df[new_name] = (df[col_key].astype(float) > median).astype(int)
+            df[new_name] = (numeric_col > median).fillna(False).astype(int)
             binary_marks.append(new_name)
     DATABASES["HistoneDB 2.0"] = {
         "df": df,
@@ -90,10 +96,13 @@ if prohistonedb_raw is not None and not prohistonedb_raw.empty:
     marks_map = {"mark1": "many_sequences", "mark2": "broad_taxonomy", "mark3": "long_sequence"}
     binary_marks = []
     for col_key, new_name in marks_map.items():
-        vals = pd.to_numeric(df[col_key], errors="coerce").dropna()
+        if col_key not in df.columns:
+            continue
+        numeric_col = pd.to_numeric(df[col_key], errors="coerce")
+        vals = numeric_col.dropna()
         if len(vals) >= 2:
             median = vals.median()
-            df[new_name] = (df[col_key].astype(float) > median).astype(int)
+            df[new_name] = (numeric_col > median).fillna(False).astype(int)
             binary_marks.append(new_name)
     DATABASES["ProHistoneDB"] = {
         "df": df,

@@ -30,6 +30,12 @@ import streamlit as st
 from scipy.stats import poisson
 from statsmodels.stats.multitest import multipletests
 
+st.set_page_config(
+    page_title="Histone-Virus Interaction Research",
+    page_icon=None,
+    layout="wide",
+)
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 with st.spinner("Importing pipeline modules..."):
@@ -39,12 +45,6 @@ with st.spinner("Importing pipeline modules..."):
         fetch_histonedb_data,
         fetch_prohistonedb_data,
     )
-
-st.set_page_config(
-    page_title="Histone-Virus Interaction Research",
-    page_icon=None,
-    layout="wide",
-)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -410,18 +410,29 @@ def _draw_virus_mark_cooccurrence(df_marks: pd.DataFrame):
     mark_types = df_marks["type"].value_counts()
     pairs = list(combinations(mark_types.index, 2))
 
-    n = len(df_marks)
+    # Build per-virus sets of mark types. The "virus" field is comma-separated
+    # (e.g. "SARS-CoV-2, MERS-CoV"), so intersection must be tested at the
+    # virus level — not per-row, since each row carries exactly one type.
+    virus_types: dict = {}
+    for _, row in df_marks.iterrows():
+        for v in [vname.strip() for vname in row["virus"].split(",")]:
+            virus_types.setdefault(v, set()).add(row["type"])
+
+    n = len(virus_types)
+    type_counts = {t: sum(1 for types in virus_types.values() if t in types)
+                   for t in mark_types.index}
+
     rows = []
     for t1, t2 in pairs:
-        n1 = mark_types[t1]
-        n2 = mark_types[t2]
-        both = ((df_marks["type"] == t1) | (df_marks["type"] == t2)).sum()
-        exp_cnt = n * (n1 / n) * (n2 / n)
+        n1 = type_counts.get(t1, 0)
+        n2 = type_counts.get(t2, 0)
+        both = sum(1 for types in virus_types.values() if t1 in types and t2 in types)
+        exp_cnt = n * (n1 / n) * (n2 / n) if n > 0 else 0
         p_val = poisson.sf(both - 1, exp_cnt) if exp_cnt > 0 else 1.0
         rows.append({
             "Mark type 1": t1,
             "Mark type 2": t2,
-            "Count (union)": both,
+            "Co-occurring viruses": both,
             "Expected (independence)": round(exp_cnt, 2),
             "Poisson p-value": round(p_val, 4),
             "Significant (p < 0.05)": p_val < 0.05,
@@ -525,11 +536,12 @@ def prepare_cooccurrence_data(source: str):
             for col_key, new_name in label_map.items():
                 if col_key not in raw.columns:
                     continue
-                vals = pd.to_numeric(raw[col_key], errors="coerce").dropna()
+                numeric_col = pd.to_numeric(raw[col_key], errors="coerce")
+                vals = numeric_col.dropna()
                 if len(vals) < 2:
                     continue
                 median = vals.median()
-                df[new_name] = (raw[col_key].astype(float) > median).astype(int)
+                df[new_name] = (numeric_col > median).fillna(False).astype(int)
                 binary_marks.append(new_name)
             if len(binary_marks) >= 2:
                 return df, binary_marks, f"{source} (live, binarized by median split)"
@@ -798,7 +810,7 @@ st.sidebar.caption(
 # ---------------------------------------------------------------------------
 
 _mask = df_marks["virus"].apply(
-    lambda v: any(fv in v for fv in filter_virus)
+    lambda v: any(fv in [x.strip() for x in v.split(",")] for fv in filter_virus)
 ) if filter_virus else pd.Series(True, index=df_marks.index)
 df_marks_filtered = df_marks[_mask].reset_index(drop=True)
 
