@@ -164,6 +164,8 @@ pytest tests/test_pipeline.py -v
 
 ---
 
+AI Assistance Disclaimer: This codebase was developed with the assistance of Claude Code. While the AI provided code generation, debugging, and structural support, the human developer maintains full responsibility for reviewing, testing, and maintaining all content and functionality.
+
 ## References
 
 - Kee J, et al. (2022) SARS-CoV-2 disrupts host epigenetic regulation via histone mimicry. *Nature* 610:381-388. doi:10.1038/s41586-022-05282-z
