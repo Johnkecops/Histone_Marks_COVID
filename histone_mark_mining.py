@@ -360,15 +360,14 @@ def fetch_prohistonedb_data():
 # Main function to integrate and analyze data
 def main(output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
+    rng = np.random.default_rng(42)
     print("=== Step 1: Data Collection, Preparation, and Normalization ===")
-    
+
     # Attempt to fetch Histome2 data; fall back to simulated dataset
     histome2_df = fetch_histome2_data()
     if histome2_df is not None and not histome2_df.empty:
         print("Using Histome2 live data.")
         df = histome2_df
-        if 'count' not in df.columns:
-            df['count'] = np.random.poisson(lam=25, size=len(df))
     else:
         print("Using simulated histone mark mining dataset.")
         df = pd.DataFrame(data_mining())
@@ -480,7 +479,7 @@ def main(output_dir="."):
 
     # Perform KS test comparing observed degrees to a Poisson distribution of similar mean
     mean_degree = np.mean(degree_values) if degree_values else 0
-    poisson_sample = np.random.poisson(lam=mean_degree, size=len(degree_values)) if mean_degree > 0 else np.zeros(len(degree_values))
+    poisson_sample = rng.poisson(lam=mean_degree, size=len(degree_values)) if mean_degree > 0 else np.zeros(len(degree_values))
     ks_statistic, ks_pvalue = ks_2samp(degree_values, poisson_sample)
     print(f"KS Goodness-of-Fit Test (comparing to Poisson/random graph distribution):")
     print(f"  KS Statistic: {ks_statistic:.4f}")

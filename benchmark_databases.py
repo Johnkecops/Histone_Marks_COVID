@@ -169,13 +169,27 @@ print(f"  Simulated: {len(df_sim)} nucleosomes, marks={sim_marks}")
 
 # ---- Compute co-occurrence and avoidance for each ----
 def compute_stats(df_binary, marks, alpha=0.05):
+    # Drop degenerate marks (constant across all regions) before testing.
+    # A constant column has no co-occurrence information and would otherwise
+    # dilute the FDR-corrected family with trivial p=1.0 tests.
+    effective_marks = []
+    for mk in marks:
+        if df_binary[mk].nunique(dropna=True) < 2:
+            print(f"  Dropping degenerate mark '{mk}': constant across {len(df_binary)} regions.")
+            continue
+        effective_marks.append(mk)
+    marks = effective_marks
+
     n = len(df_binary)
     m = len(marks)
-    occurrence = df_binary[marks].mean()
+    occurrence = df_binary[marks].mean() if marks else pd.Series(dtype=float)
     obs_mat = np.zeros((m, m))
     exp_mat = np.zeros((m, m))
     p_co = np.ones((m, m))
     p_av = np.ones((m, m))
+    p_co_adj_mat = np.ones((m, m))
+    p_av_adj_mat = np.ones((m, m))
+    pair_indices = []
     test_stats = []
     for i, mi in enumerate(marks):
         for j, mj in enumerate(marks):
@@ -201,15 +215,37 @@ def compute_stats(df_binary, marks, alpha=0.05):
             p_av[i, j] = p_av_val
             p_av[j, i] = p_av_val
             lfc = np.log2(both / exp_cnt) if (exp_cnt > 0 and both > 0) else (-10.0 if (exp_cnt > 0 and both == 0) else 0.0)
+            pair_indices.append((i, j))
             test_stats.append({
                 "pair": f"{mi} vs {mj}",
                 "mark_i": mi, "mark_j": mj,
                 "observed": int(both), "expected": round(exp_cnt, 2),
                 "occurrence_i": round(float(pi), 3), "occurrence_j": round(float(pj), 3),
                 "n_regions": n,
-                "p_cooccurrence": round(p_co_val, 6), "p_avoidance": round(p_av_val, 6),
+                # Full precision retained here: these feed multipletests()
+                # below. Rounding before FDR correction was silently
+                # flooring small p-values to 0.0 (round(1e-9, 6) == 0.0),
+                # which corrupted the correction. Round only for display.
+                "p_cooccurrence": p_co_val, "p_avoidance": p_av_val,
                 "log2_fold_change": round(lfc, 3),
             })
+
+    if not test_stats:
+        df_test = pd.DataFrame(columns=[
+            "pair", "mark_i", "mark_j", "observed", "expected",
+            "occurrence_i", "occurrence_j", "n_regions",
+            "p_cooccurrence", "p_avoidance", "log2_fold_change",
+            "p_cooccurrence_adj", "p_avoidance_adj",
+            "cooccurrence_significant", "avoidance_significant",
+        ])
+        return {
+            "marks": marks, "occurrence": occurrence,
+            "observed_matrix": obs_mat, "expected_matrix": exp_mat,
+            "p_cooccurrence": p_co, "p_avoidance": p_av,
+            "p_cooccurrence_adj": p_co_adj_mat, "p_avoidance_adj": p_av_adj_mat,
+            "test_table": df_test, "alpha": alpha,
+        }
+
     df_test = pd.DataFrame(test_stats)
     pvals_co = df_test["p_cooccurrence"].values
     pvals_av = df_test["p_avoidance"].values
@@ -219,16 +255,27 @@ def compute_stats(df_binary, marks, alpha=0.05):
     df_test["p_avoidance_adj"] = pcor_av
     df_test["cooccurrence_significant"] = (pcor_co < alpha) & (df_test["observed"] > df_test["expected"])
     df_test["avoidance_significant"] = (pcor_av < alpha) & (df_test["observed"] < df_test["expected"])
+
+    # Scatter FDR-adjusted p-values back into (m x m) matrices so figures
+    # can gate on the adjusted values instead of the raw ones (C1 fix).
+    for (i, j), pco, pav in zip(pair_indices, pcor_co, pcor_av):
+        p_co_adj_mat[i, j] = pco
+        p_co_adj_mat[j, i] = pco
+        p_av_adj_mat[i, j] = pav
+        p_av_adj_mat[j, i] = pav
+
     return {
         "marks": marks, "occurrence": occurrence,
         "observed_matrix": obs_mat, "expected_matrix": exp_mat,
         "p_cooccurrence": p_co, "p_avoidance": p_av,
+        "p_cooccurrence_adj": p_co_adj_mat, "p_avoidance_adj": p_av_adj_mat,
         "test_table": df_test, "alpha": alpha,
     }
 
 for db_name in DATABASES:
     db = DATABASES[db_name]
     db["stats"] = compute_stats(db["df"], db["marks"], alpha=0.05)
+    db["marks"] = db["stats"]["marks"]
     tt = db["stats"]["test_table"]
     n_sig_co = tt["cooccurrence_significant"].sum()
     n_sig_av = tt["avoidance_significant"].sum()
@@ -260,7 +307,7 @@ for idx, (db_name, db) in enumerate(DATABASES.items()):
     for bar, val in zip(bars, occ.values):
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
                 f"{val*100:.1f}%", ha="center", va="bottom", fontsize=7)
-    ax.set_ylim(0, max(occ.values) * 100 * 1.25)
+    ax.set_ylim(0, max(occ.values, default=1) * 100 * 1.25)
 
 fig.suptitle("Histone Mark Occurrence: Database Comparison", fontsize=12, fontweight="bold")
 plt.tight_layout()
@@ -278,8 +325,10 @@ for row, (db_name, db) in enumerate(DATABASES.items()):
     marks = stats["marks"]
     obs = stats["observed_matrix"]
     exp_m = stats["expected_matrix"]
-    p_co = stats["p_cooccurrence"]
-    p_av = stats["p_avoidance"]
+    # FDR-adjusted matrices, not raw p-values, gate the significance stars
+    # so the figure agrees with the manuscript table (C1 fix).
+    p_co = stats["p_cooccurrence_adj"]
+    p_av = stats["p_avoidance_adj"]
     alpha = stats["alpha"]
     matrices = [obs, exp_m, obs - exp_m]
     cmaps = ["YlOrRd", "YlOrRd", "RdYlBu_r"]
@@ -323,8 +372,9 @@ for idx, (db_name, db) in enumerate(DATABASES.items()):
     stats = db["stats"]
     marks = stats["marks"]
     obs = stats["observed_matrix"]
-    p_co = stats["p_cooccurrence"]
-    p_av = stats["p_avoidance"]
+    # FDR-adjusted matrices gate network edges too (C1 fix).
+    p_co = stats["p_cooccurrence_adj"]
+    p_av = stats["p_avoidance_adj"]
     alpha = stats["alpha"]
 
     G = nx.Graph()
@@ -388,7 +438,7 @@ for db_name, db in DATABASES.items():
 
 df_summary = pd.DataFrame(rows)
 summary_path = os.path.join(OUTPUT_DIR, "db_comparison_summary.csv")
-df_summary.to_csv(summary_path, index=False)
+df_summary.to_csv(summary_path, index=False, float_format="%.4g")
 print(f"\nSummary saved to {summary_path}")
 print(df_summary.to_string(index=False))
 print("\nDone.")

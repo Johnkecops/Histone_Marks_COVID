@@ -52,7 +52,7 @@ Fetches all three databases live, computes occurrence, co-occurrence, and avoida
 ### Figure generation
 
 ```bash
-python gen_figures.py
+python generate_figures.py
 ```
 
 Generates 6 figures (NETosis pathway, ORF8 mimicry network, immunothrombosis cycle, occurrence barchart, co-occurrence heatmap, network graph).
@@ -92,12 +92,12 @@ All continuous variables binarized by median split. Co-occurrence and avoidance 
 
 | Data Source | Significant Pairs | Best Effect Size |
 |-------------|-------------------|------------------|
-| Histome2 | 0 | has_writer vs has_eraser (p_adj = 0.194, LFC = 0.67) |
+| Histome2 | 0 | has_writer vs has_eraser (p_adj = 0.065, LFC = 0.67) |
 | HistoneDB 2.0 | 0 | many_seq vs broad_tax (p_adj = 0.065, LFC = 0.90) |
 | ProHistoneDB | 0 | many_seq vs broad_tax (p_adj = 0.507, LFC = 0.64) |
 | Simulated | 6 (3 co-occur, 3 avoid) | H3K4me3 vs H3K27ac (p_adj < 0.001, LFC = 1.04) |
 
-No real database showed significant co-occurrence or avoidance after FDR correction. The simulated positive control correctly recovered all embedded relationships, confirming analytical sensitivity.
+Marks constant across all regions (e.g. Histome2 multi_mod) are dropped before testing, so they do not enter the FDR family. No real database showed significant co-occurrence or avoidance after FDR correction. The simulated positive control correctly recovered all embedded relationships, confirming analytical sensitivity.
 
 ---
 
@@ -118,7 +118,7 @@ No real database showed significant co-occurrence or avoidance after FDR correct
 ```
 ├── app-covid.py                    # Streamlit dashboard (main application)
 ├── benchmark_databases.py          # Database benchmarking script
-├── gen_figures.py                  # Figure generation from pipeline
+├── generate_figures.py              # Figure generation from pipeline
 ├── histone_mark_mining.py          # Original pipeline (CLI)
 ├── app.py                          # Original Streamlit dashboard
 ├── CLAUDE.md                       # Agent context
@@ -178,3 +178,7 @@ pytest tests/test_pipeline.py -v
 ## License
 
 For academic and research use. Contact the author for other uses.
+
+---
+
+AI Assistance Disclaimer: This codebase was developed with the assistance of Claude Code. While the AI provided code generation, debugging, and structural support, the human developer maintains full responsibility for reviewing, testing, and maintaining all content and functionality

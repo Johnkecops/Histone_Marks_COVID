@@ -25,7 +25,11 @@ from sklearn.preprocessing import StandardScaler
 
 def test_data_mining_keys():
     result = _mod.data_mining()
-    assert set(result.keys()) == {"region", "mark1", "mark2", "mark3", "count"}
+    expected = {
+        "region", "histone_modification", "organism_type", "species",
+        "mark1", "mark2", "mark3", "count",
+    }
+    assert set(result.keys()) == expected
 
 
 def test_data_mining_length():
@@ -56,6 +60,7 @@ def test_data_mining_reproducible():
 # fetch_histome2_data()
 # ---------------------------------------------------------------------------
 
+@pytest.mark.network
 def test_fetch_histome2_returns_none_or_dataframe():
     result = _mod.fetch_histome2_data()
     assert result is None or isinstance(result, pd.DataFrame)
@@ -103,3 +108,25 @@ def test_degree_centrality_bounded(built_graph):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# ---------------------------------------------------------------------------
+# compute_cooccurrence_stats() (extracted via ast: generate_figures.py runs on import)
+# ---------------------------------------------------------------------------
+
+def test_cooccurrence_drops_constant_and_keeps_small_p():
+    import ast
+    from scipy.stats import poisson
+    from statsmodels.stats.multitest import multipletests
+    path = os.path.join(os.path.dirname(__file__), "..", "generate_figures.py")
+    tree = ast.parse(open(path).read())
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "compute_cooccurrence_stats")
+    ns = {"np": np, "pd": pd, "poisson": poisson, "multipletests": multipletests}
+    exec(compile(ast.Module([fn], []), path, "exec"), ns)
+
+    a = np.array([1] * 100 + [0] * 900)
+    df = pd.DataFrame({"a": a, "b": a, "const": 0})
+    res = ns["compute_cooccurrence_stats"](df, ["a", "b", "const"])
+    assert res["marks"] == ["a", "b"]
+    p_adj = res["test_table"]["p_cooccurrence_adj"].iloc[0]
+    assert 0 < p_adj < 1e-6  # not floored to 0 by pre-FDR rounding

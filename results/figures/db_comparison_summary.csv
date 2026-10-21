@@ -1,20 +1,18 @@
 Database,Pair,Observed,Expected,Log2FC,Co-occurrence (p_adj),Avoidance (p_adj),Co-occurrence significant,Avoidance significant
-Histome2,has_writer vs has_eraser,14,8.81,0.669,0.19355100000000003,1.0,,
-Histome2,has_writer vs multi_mod,0,0.0,0.0,1.0,1.0,,
-Histome2,has_eraser vs multi_mod,0,0.0,0.0,1.0,1.0,,
-HistoneDB 2.0,high_HMM_score vs many_sequences,7,7.5,-0.1,0.621845,0.7869585,,
-HistoneDB 2.0,high_HMM_score vs broad_taxonomy,7,7.5,-0.1,0.621845,0.7869585,,
-HistoneDB 2.0,many_sequences vs broad_taxonomy,14,7.5,0.9,0.064695,0.98974,,
-ProHistoneDB,many_sequences vs broad_taxonomy,7,4.5,0.637,0.506847,0.913414,,
-ProHistoneDB,many_sequences vs long_sequence,7,6.0,0.222,0.5905455000000001,0.913414,,
-ProHistoneDB,broad_taxonomy vs long_sequence,4,4.5,-0.17,0.657704,0.913414,,
-Simulated,H3K4me3 vs H3K27ac,56,27.34,1.035,9.999999999999999e-06,1.0,Yes,
-Simulated,H3K4me3 vs H3K9me3,4,19.53,-2.287,0.999995,0.000145,,Yes
-Simulated,H3K4me3 vs H3K36me3,25,18.46,0.438,0.21136999999999997,1.0,,
-Simulated,H3K4me3 vs H2AK5ac,26,15.62,0.735,0.03326333333333333,1.0,Yes,
-Simulated,H3K27ac vs H3K9me3,5,21.18,-2.082,0.999995,0.000145,,Yes
-Simulated,H3K27ac vs H3K36me3,24,20.02,0.262,0.427694,1.0,,
-Simulated,H3K27ac vs H2AK5ac,36,16.94,1.088,0.00018499999999999997,1.0,Yes,
-Simulated,H3K9me3 vs H3K36me3,10,14.3,-0.516,0.999995,0.3915975,,
-Simulated,H3K9me3 vs H2AK5ac,4,12.1,-1.597,0.999995,0.023623333333333336,,Yes
-Simulated,H3K36me3 vs H2AK5ac,11,11.44,-0.057,0.98578,1.0,,
+Histome2,has_writer vs has_eraser,14,8.81,0.669,0.06452,0.9645,,
+HistoneDB 2.0,high_HMM_score vs many_sequences,7,7.5,-0.1,0.6218,0.787,,
+HistoneDB 2.0,high_HMM_score vs broad_taxonomy,7,7.5,-0.1,0.6218,0.787,,
+HistoneDB 2.0,many_sequences vs broad_taxonomy,14,7.5,0.9,0.06469,0.9897,,
+ProHistoneDB,many_sequences vs broad_taxonomy,7,4.5,0.637,0.5068,0.9134,,
+ProHistoneDB,many_sequences vs long_sequence,7,6,0.222,0.5905,0.9134,,
+ProHistoneDB,broad_taxonomy vs long_sequence,4,4.5,-0.17,0.6577,0.9134,,
+Simulated,H3K4me3 vs H3K27ac,56,27.34,1.035,1.025e-05,1,Yes,
+Simulated,H3K4me3 vs H3K9me3,4,19.53,-2.287,1,0.0001454,,Yes
+Simulated,H3K4me3 vs H3K36me3,25,18.46,0.438,0.2114,1,,
+Simulated,H3K4me3 vs H2AK5ac,26,15.62,0.735,0.03326,1,Yes,
+Simulated,H3K27ac vs H3K9me3,5,21.18,-2.082,1,0.0001454,,Yes
+Simulated,H3K27ac vs H3K36me3,24,20.02,0.262,0.4277,1,,
+Simulated,H3K27ac vs H2AK5ac,36,16.94,1.088,0.0001866,1,Yes,
+Simulated,H3K9me3 vs H3K36me3,10,14.3,-0.516,1,0.3916,,
+Simulated,H3K9me3 vs H2AK5ac,4,12.1,-1.597,1,0.02362,,Yes
+Simulated,H3K36me3 vs H2AK5ac,11,11.44,-0.057,0.9858,1,,

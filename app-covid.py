@@ -195,16 +195,29 @@ def compute_cooccurrence_stats(
     marks: list[str],
     alpha: float = 0.05,
 ):
+    # Drop degenerate marks (constant across all regions) before testing.
+    # A constant column has no co-occurrence information and would otherwise
+    # dilute the FDR-corrected family with trivial p=1.0 tests.
+    effective_marks = []
+    for mk in marks:
+        if df_binary[mk].nunique(dropna=True) < 2:
+            print(f"  Dropping degenerate mark '{mk}': constant across {len(df_binary)} regions.")
+            continue
+        effective_marks.append(mk)
+    marks = effective_marks
+
     n = len(df_binary)
     m = len(marks)
-    occurrence = df_binary[marks].mean()
+    occurrence = df_binary[marks].mean() if marks else pd.Series(dtype=float)
 
     obs_mat = np.zeros((m, m))
     exp_mat = np.zeros((m, m))
     lfc_mat = np.zeros((m, m))
     p_co = np.ones((m, m))
     p_av = np.ones((m, m))
-    test_labels = []
+    p_co_adj_mat = np.ones((m, m))
+    p_av_adj_mat = np.ones((m, m))
+    pair_indices = []
     test_stats = []
 
     for i, mi in enumerate(marks):
@@ -248,7 +261,7 @@ def compute_cooccurrence_stats(
             p_av[i, j] = p_av_val
             p_av[j, i] = p_av_val
 
-            test_labels.append(f"{mi} vs {mj}")
+            pair_indices.append((i, j))
             test_stats.append({
                 "pair": f"{mi} vs {mj}",
                 "mark_i": mi,
@@ -258,10 +271,35 @@ def compute_cooccurrence_stats(
                 "occurrence_i": round(float(pi), 3),
                 "occurrence_j": round(float(pj), 3),
                 "n_regions": n,
-                "p_cooccurrence": round(p_co_val, 6),
-                "p_avoidance": round(p_av_val, 6),
+                # Full precision retained: these feed multipletests() below.
+                # Rounding before FDR correction was silently flooring small
+                # p-values to 0.0 (round(1e-9, 6) == 0.0). CSV export rounds via float_format.
+                "p_cooccurrence": p_co_val,
+                "p_avoidance": p_av_val,
                 "log2_fold_change": round(lfc_mat[i, j], 3),
             })
+
+    if not test_stats:
+        df_test = pd.DataFrame(columns=[
+            "pair", "mark_i", "mark_j", "observed", "expected",
+            "occurrence_i", "occurrence_j", "n_regions",
+            "p_cooccurrence", "p_avoidance", "log2_fold_change",
+            "p_cooccurrence_adj", "p_avoidance_adj",
+            "cooccurrence_significant", "avoidance_significant",
+        ])
+        return {
+            "marks": marks,
+            "occurrence": occurrence,
+            "observed_matrix": obs_mat,
+            "expected_matrix": exp_mat,
+            "log2fc_matrix": lfc_mat,
+            "p_cooccurrence": p_co,
+            "p_avoidance": p_av,
+            "p_cooccurrence_adj": p_co_adj_mat,
+            "p_avoidance_adj": p_av_adj_mat,
+            "test_table": df_test,
+            "alpha": alpha,
+        }
 
     df_test = pd.DataFrame(test_stats)
     pvals_co = df_test["p_cooccurrence"].values
@@ -273,6 +311,14 @@ def compute_cooccurrence_stats(
     df_test["cooccurrence_significant"] = (pcor_co < alpha) & (df_test["observed"] > df_test["expected"])
     df_test["avoidance_significant"] = (pcor_av < alpha) & (df_test["observed"] < df_test["expected"])
 
+    # Scatter FDR-adjusted p-values back into (m x m) matrices so figures
+    # can gate on the adjusted values instead of the raw ones (C1 fix).
+    for (i, j), pco, pav in zip(pair_indices, pcor_co, pcor_av):
+        p_co_adj_mat[i, j] = pco
+        p_co_adj_mat[j, i] = pco
+        p_av_adj_mat[i, j] = pav
+        p_av_adj_mat[j, i] = pav
+
     return {
         "marks": marks,
         "occurrence": occurrence,
@@ -281,6 +327,8 @@ def compute_cooccurrence_stats(
         "log2fc_matrix": lfc_mat,
         "p_cooccurrence": p_co,
         "p_avoidance": p_av,
+        "p_cooccurrence_adj": p_co_adj_mat,
+        "p_avoidance_adj": p_av_adj_mat,
         "test_table": df_test,
         "alpha": alpha,
     }
@@ -302,7 +350,7 @@ def _draw_occurrence_barchart(occ: pd.Series):
     for bar, val in zip(bars, occ.values):
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
                 f"{val * 100:.1f}%", ha="center", va="bottom", fontsize=8)
-    ax.set_ylim(0, max(occ.values) * 100 * 1.2)
+    ax.set_ylim(0, max(occ.values, default=1) * 100 * 1.2)
     st.pyplot(fig)
     plt.close(fig)
 
@@ -311,8 +359,10 @@ def _draw_cooccurrence_heatmap(stats: dict):
     marks = stats["marks"]
     obs = stats["observed_matrix"]
     exp = stats["expected_matrix"]
-    p_co = stats["p_cooccurrence"]
-    p_av = stats["p_avoidance"]
+    # FDR-adjusted matrices gate the significance stars so the figure
+    # agrees with the pairwise results table (C1 fix).
+    p_co = stats["p_cooccurrence_adj"]
+    p_av = stats["p_avoidance_adj"]
     alpha = stats["alpha"]
 
     fig, axes = plt.subplots(1, 3, figsize=(16, 5))
@@ -348,7 +398,7 @@ def _draw_cooccurrence_heatmap(stats: dict):
                 ax.text(j, i, txt, ha="center", va="center",
                         fontsize=7, color="black" if abs(val - 0.5) < 0.3 else "white")
 
-    fig.suptitle("Histone Mark Co-occurrence Analysis (* p_co < alpha; \u2020 p_avoid < alpha)",
+    fig.suptitle("Histone Mark Co-occurrence Analysis (* p_adj(co) < alpha; \u2020 p_adj(avoid) < alpha)",
                  fontsize=11, fontweight="bold", y=1.02)
     fig.tight_layout()
     st.pyplot(fig)
@@ -358,8 +408,9 @@ def _draw_cooccurrence_heatmap(stats: dict):
 def _draw_cooccurrence_network(stats: dict):
     marks = stats["marks"]
     obs = stats["observed_matrix"]
-    p_co = stats["p_cooccurrence"]
-    p_av = stats["p_avoidance"]
+    # FDR-adjusted matrices gate network edges too (C1 fix).
+    p_co = stats["p_cooccurrence_adj"]
+    p_av = stats["p_avoidance_adj"]
     alpha = stats["alpha"]
 
     G = nx.Graph()
@@ -827,6 +878,9 @@ cooc_alpha = st.sidebar.slider(
 )
 
 cooc_stats = compute_cooccurrence_stats(df_nuc, marks_nuc, alpha=cooc_alpha)
+marks_nuc = cooc_stats["marks"]
+if len(marks_nuc) < 2:
+    st.sidebar.warning("Fewer than 2 non-constant marks in this source; co-occurrence tests are empty.")
 df_cooc_test = cooc_stats["test_table"]
 
 # ---------------------------------------------------------------------------
@@ -1297,8 +1351,8 @@ with tabs[2]:
 
     st.subheader("Mark Descriptions")
     for mark, desc in _cooc_meta["descriptions"].items():
-        freq = occ.get(mark, 0)
-        st.markdown(f"- **{mark}**: {desc} (occurrence = {freq * 100:.1f}%)")
+        freq = f"{occ[mark] * 100:.1f}%" if mark in occ else "dropped, constant across regions"
+        st.markdown(f"- **{mark}**: {desc} (occurrence = {freq})")
     st.caption(f"Binarization method: {_cooc_meta['binary_method']}")
 
 # ===== Tab 4: Co-occurrence ==============================================
