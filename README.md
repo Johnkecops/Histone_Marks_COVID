@@ -1,4 +1,4 @@
-<img width="468" height="79" alt="image" src="https://github.com/user-attachments/assets/ae739b52-9c33-4e70-8863-9fd7fc016176" /># Histone Marks in Coronavirus Infection: Co-occurrence and Avoidance in the Human Nucleosome
+**Histone Marks in Coronavirus Infection: Co-occurrence and Avoidance in the Human Nucleosome**
 
 A reproducible bioinformatics pipeline for histone mark co-occurrence and avoidance analysis, benchmarking three public histone databases (Histome2, HistoneDB 2.0, ProHistoneDB) alongside simulated nucleosome data.
 
