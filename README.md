@@ -2,6 +2,10 @@
 
 A reproducible bioinformatics pipeline for histone mark co-occurrence and avoidance analysis, benchmarking three public histone databases (Histome2, HistoneDB 2.0, ProHistoneDB) alongside simulated nucleosome data.
 
+The paper based on this repository has been **submitted to a journal** and is **under review**, with the following citation:
+
+Parikesit, Arli Aditya., Ansori, Arif Muhammad Nur., Afnani, Royhan Moh. 2026. Histone Marks in Coronavirus Infection: Co-occurrence and Avoidance in the Human Nucleosome. Coronaviruses. Bentham Sciences. https://www.benthamscience.com/journal/190
+
 **Author:** Dr. Arli Aditya Parikesit  
 **Affiliation:** Department of Biotechnology, i3L University, Jakarta  
 **ORCID:** https://orcid.org/0000-0001-8716-3926
